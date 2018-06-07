@@ -20,7 +20,7 @@ resource "digitalocean_droplet" "web" {
   image  = "ubuntu-14-04-x64"
   name   = "web-1"
   region = "nyc2"
-  size   = "512mb"
+  size   = "s-1vcpu-1gb"
 }
 ```
 
@@ -34,6 +34,8 @@ The following arguments are supported:
 * `size` - (Required) The instance size to start
 * `backups` - (Optional) Boolean controlling if backups are made. Defaults to
    false.
+* `monitoring` - (Optional) Boolean controlling whether monitoring agent is installed.
+   Defaults to false.
 * `ipv6` - (Optional) Boolean controlling if IPv6 is enabled. Defaults to false.
 * `private_networking` - (Optional) Boolean controlling if private networks are
    enabled. Defaults to false.

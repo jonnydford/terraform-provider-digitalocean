@@ -85,6 +85,12 @@ func resourceDigitalOceanFirewall() *schema.Resource {
 						"port_range": {
 							Type:     schema.TypeString,
 							Optional: true,
+							DiffSuppressFunc: func(k, oldV, newV string, d *schema.ResourceData) bool {
+								if oldV == "0" && newV == "all" {
+									return true
+								}
+								return (oldV == newV)
+							},
 						},
 						"source_addresses": {
 							Type:     schema.TypeList,
@@ -122,6 +128,12 @@ func resourceDigitalOceanFirewall() *schema.Resource {
 						"port_range": {
 							Type:     schema.TypeString,
 							Optional: true,
+							DiffSuppressFunc: func(k, oldV, newV string, d *schema.ResourceData) bool {
+								if oldV == "0" && newV == "all" {
+									return true
+								}
+								return (oldV == newV)
+							},
 						},
 						"destination_addresses": {
 							Type:     schema.TypeList,
@@ -352,7 +364,7 @@ func expandFirewallOutboundRules(d *schema.ResourceData) []godo.OutboundRule {
 
 		destinationTags := rule["destination_tags"].([]interface{})
 		for _, tag := range destinationTags {
-			dest.Addresses = append(dest.Tags, tag.(string))
+			dest.Tags = append(dest.Tags, tag.(string))
 		}
 
 		dropletIds := rule["destination_droplet_ids"].([]interface{})

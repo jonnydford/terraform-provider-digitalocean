@@ -210,7 +210,7 @@ func SetBaseURL(bu string) ClientOpt {
 // SetUserAgent is a client option for setting the user agent.
 func SetUserAgent(ua string) ClientOpt {
 	return func(c *Client) error {
-		c.UserAgent = fmt.Sprintf("%s+%s", ua, c.UserAgent)
+		c.UserAgent = fmt.Sprintf("%s %s", ua, c.UserAgent)
 		return nil
 	}
 }
@@ -356,7 +356,7 @@ func CheckResponse(r *http.Response) error {
 	if err == nil && len(data) > 0 {
 		err := json.Unmarshal(data, errorResponse)
 		if err != nil {
-			return err
+			errorResponse.Message = string(data)
 		}
 	}
 

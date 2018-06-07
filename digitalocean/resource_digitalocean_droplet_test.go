@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,9 +35,10 @@ func testSweepDroplets(region string) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("[DEBUG] Found %d droplets to sweep", len(droplets))
 
 	for _, d := range droplets {
-		if strings.HasPrefix(d.Name, "foo-") || strings.HasPrefix(d.Name, "bar-") {
+		if strings.HasPrefix(d.Name, "foo-") || strings.HasPrefix(d.Name, "bar-") || strings.HasPrefix(d.Name, "baz-") {
 			log.Printf("Destroying Droplet %s", d.Name)
 
 			if _, err := client.Droplets.Delete(context.Background(), d.ID); err != nil {
@@ -102,6 +104,11 @@ func TestAccDigitalOceanDroplet_WithID(t *testing.T) {
 		},
 	})
 }
+
+/*func testAccDigitalOceanDroplet_getID() string {
+	// TODO (Jake): Finish this.
+}*/
+
 func TestAccDigitalOceanDroplet_withSSH(t *testing.T) {
 	var droplet godo.Droplet
 	rInt := acctest.RandInt()
@@ -348,6 +355,56 @@ func TestAccDigitalOceanDroplet_PrivateNetworkingIpv6(t *testing.T) {
 						"digitalocean_droplet.foobar", "private_networking", "true"),
 					resource.TestCheckResourceAttr(
 						"digitalocean_droplet.foobar", "ipv6", "true"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccDigitalOceanDroplet_Monitoring(t *testing.T) {
+	var droplet godo.Droplet
+	rInt := acctest.RandInt()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckDigitalOceanDropletDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckDigitalOceanDropletConfig_Monitoring(rInt),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDigitalOceanDropletExists("digitalocean_droplet.foobar", &droplet),
+					resource.TestCheckResourceAttr(
+						"digitalocean_droplet.foobar", "monitoring", "true"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccDigitalOceanDroplet_conditionalVolumes(t *testing.T) {
+	var firstDroplet godo.Droplet
+	var secondDroplet godo.Droplet
+	rInt := acctest.RandInt()
+	volumeIdRe := regexp.MustCompile("^[a-f0-9-]+$")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckDigitalOceanDropletDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckDigitalOceanDropletConfig_conditionalVolumes(rInt),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDigitalOceanDropletExists("digitalocean_droplet.foobar.0", &firstDroplet),
+					testAccCheckDigitalOceanDropletExists("digitalocean_droplet.foobar.1", &secondDroplet),
+					resource.TestCheckResourceAttr("digitalocean_droplet.foobar.0", "volume_ids.#", "1"),
+					resource.TestMatchResourceAttr("digitalocean_droplet.foobar.0", "volume_ids.0", volumeIdRe),
+
+					// This could be improved in core/HCL to make it less confusing
+					// but it's the only way to use conditionals in this context for now and "it works"
+					resource.TestCheckResourceAttr("digitalocean_droplet.foobar.1", "volume_ids.#", "1"),
+					resource.TestCheckResourceAttr("digitalocean_droplet.foobar.1", "volume_ids.0", ""),
 				),
 			},
 		},
@@ -661,6 +718,38 @@ resource "digitalocean_droplet" "foobar" {
   private_networking = true
 }
 `, rInt)
+}
+
+func testAccCheckDigitalOceanDropletConfig_Monitoring(rInt int) string {
+	return fmt.Sprintf(`
+resource "digitalocean_droplet" "foobar" {
+  name       = "foo-%d"
+  size       = "1gb"
+  image      = "centos-7-x64"
+  region     = "nyc3"
+  monitoring = true
+ }
+ `, rInt)
+}
+
+func testAccCheckDigitalOceanDropletConfig_conditionalVolumes(rInt int) string {
+	return fmt.Sprintf(`
+resource "digitalocean_volume" "myvol-01" {
+    region      = "sfo2"
+    name        = "tf-acc-test-%d"
+    size        = 1
+    description = "an example volume"
+}
+
+resource "digitalocean_droplet" "foobar" {
+  count = 2
+  name = "tf-acc-test-%d-${count.index}"
+  region = "sfo2"
+  image = "centos-7-x64"
+  size = "512mb"
+  volume_ids = ["${count.index == 0 ? digitalocean_volume.myvol-01.id : ""}"]
+}
+`, rInt, rInt)
 }
 
 var testAccValidPublicKey = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCKVmnMOlHKcZK8tpt3MP1lqOLAcqcJzhsvJcjscgVERRN7/9484SOBJ3HSKxxNG5JN8owAjy5f9yYwcUg+JaUVuytn5Pv3aeYROHGGg+5G346xaq3DAwX6Y5ykr2fvjObgncQBnuU5KHWCECO/4h8uWuwh/kfniXPVjFToc+gnkqA+3RKpAecZhFXwfalQ9mMuYGFxn+fwn8cYEApsJbsEmb0iJwPiZ5hjFC8wREuiTlhPHDgkBLOiycd20op2nXzDbHfCHInquEe/gYxEitALONxm0swBOwJZwlTDOB7C6y2dzlrtxr1L59m7pCkWI4EtTRLvleehBoj3u7jB4usR`

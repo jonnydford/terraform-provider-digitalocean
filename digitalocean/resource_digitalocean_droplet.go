@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -151,6 +152,11 @@ func resourceDigitalOceanDroplet() *schema.Resource {
 				Elem:     &schema.Schema{Type: schema.TypeString},
 				Optional: true,
 			},
+			"monitoring": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				ForceNew: true,
+			},
 		},
 	}
 }
@@ -186,10 +192,22 @@ func resourceDigitalOceanDropletCreate(d *schema.ResourceData, meta interface{})
 
 	if attr, ok := d.GetOk("volume_ids"); ok {
 		for _, id := range attr.([]interface{}) {
+			if id == nil {
+				continue
+			}
+			volumeId := id.(string)
+			if volumeId == "" {
+				continue
+			}
+
 			opts.Volumes = append(opts.Volumes, godo.DropletCreateVolume{
-				ID: id.(string),
+				ID: volumeId,
 			})
 		}
+	}
+
+	if attr, ok := d.GetOk("monitoring"); ok {
+		opts.Monitoring = attr.(bool)
 	}
 
 	// Get configured ssh_keys
@@ -315,7 +333,9 @@ func resourceDigitalOceanDropletRead(d *schema.ResourceData, meta interface{}) e
 func findIPv6AddrByType(d *godo.Droplet, addrType string) string {
 	for _, addr := range d.Networks.V6 {
 		if addr.Type == addrType {
-			return addr.IPAddress
+			if ip := net.ParseIP(addr.IPAddress); ip != nil {
+				return addr.IPAddress
+			}
 		}
 	}
 	return ""
@@ -324,7 +344,9 @@ func findIPv6AddrByType(d *godo.Droplet, addrType string) string {
 func findIPv4AddrByType(d *godo.Droplet, addrType string) string {
 	for _, addr := range d.Networks.V4 {
 		if addr.Type == addrType {
-			return addr.IPAddress
+			if ip := net.ParseIP(addr.IPAddress); ip != nil {
+				return addr.IPAddress
+			}
 		}
 	}
 	return ""
@@ -339,7 +361,7 @@ func resourceDigitalOceanDropletUpdate(d *schema.ResourceData, meta interface{})
 	}
 
 	resizeDisk := d.Get("resize_disk").(bool)
-	if d.HasChange("size") || d.HasChange("resize_disk") && resizeDisk {
+	if resizeDisk && d.HasChange("size") {
 		newSize := d.Get("size")
 
 		_, _, err = client.DropletActions.PowerOff(context.Background(), id)
